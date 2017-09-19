@@ -70,23 +70,30 @@ class Api(object):
 
     def get_allowed_actions(self):
         '''
-        @return: A list of {'action_id': <int - represents the action>,
-                            'action': <str - represents the action>,
-                            'signer': <bool - is this a signer action>,
-                            'validator': <bool - is this a validator action>}
+        Get a list of the allowed actions for user rules.
+
+        :rtype: A list of objects
+
+        Returned object::
+
+              {'action_id': <int - represents the action>,
+               'action': <str - represents the action>,
+               'signer': <bool - is this a signer action>,
+               'validator': <bool - is this a validator action>}
+
         '''
         return self.__get('allowed_actions')
 
 
     def post_block(self, device_ids=None, seat_ids=None):
         '''
-        @param device_ids: Optional Id or Ids representing the device(s) to block.
-        @type device_ids: List or String
+        Block a given device or a seat on a device.
 
-        @param seat_ids: Optional Id or Ids representing the seat(s) to block.
-        @type seat_ids: String or List
+        :param device_ids: Optional Id or Ids representing the device(s) to block.
+        :param seat_ids: Optional Id or Ids representing the seat(s) to block.
+        :type seat_ids: String or List
+        :rtype: An integer representing the number of devices blocked.
 
-        @return: An integer representing the number of devices blocked.
         '''
         params = {}
         if device_ids is not None:
@@ -98,49 +105,62 @@ class Api(object):
 
     def get_builtin_rules(self):
         '''
-        @return: A list of {'rule_id': <int - internal value identifying the rule>,
+        Get a list of the builtin rules to be used as templates for creating
+        other rules.
+
+        :rtype: A list of objects
+
+        Returned object::
+
+                           {'rule_id': <int - internal value identifying the rule>,
                             'start_port': <int - starting port of builtin rule>,
                             'end_port': <int - ending port of builtin rule>,
                             'name': <string - user facing name for the builtin rule>,
                             'protocol_id': <int - internal integer representing the protocol>,
                             'protocol': <str - string representing the protocol>}
-                            
+
         '''
         return self.__get('builtin_rules')
 
 
     def get_capture(self, threat_id):
         '''
-        @param threat_id: Id representing the threat Id.
-        @type threat_id: String
+        Get the contents of a packet capture generated from a given *threat_id*.
 
-        @return: The raw contents of the pcap.
+        :param threat_id: Id representing the threat Id.
+        :type threat_id: String
+        :rtype: The raw contents of the pcap.
         '''
         return self.__get('capture', {'threat_id':threat_id})
 
 
     def get_config_profiles(self):
         '''
-        @return: A list of {'rule_id': <int - internal value identifying the rule>,
+        Get the list of configuration profiles.
+
+        :rtype: A list of objects
+
+        Returned object::
+                           {'rule_id': <int - internal value identifying the rule>,
                             'start_port': <int - starting port of builtin rule>,
                             'end_port': <int - ending port of builtin rule>,
                             'name': <string - user facing name for the builtin rule>,
                             'protocol_id': <int - internal integer representing the protocol>,
                             'protocol': <str - string representing the protocol>}
-                            
+
         '''
         return self.__get('config_profiles')
 
 
     def post_unblock(self, device_ids=None, seat_ids=None):
         '''
-        @param device_ids: Optional Id or Ids representing the device(s) to unblock.
-        @type device_ids: List or String
+        Unblock a given device or seat on a device.
 
-        @param seat_ids: Optional Id or Ids representing the seat(s) to unblock.
-        @type seat_ids: String or List
-
-        @return: An integer representing the number of devices unblocked.
+        :param device_ids: Optional Id or Ids representing the device(s) to unblock.
+        :type device_ids: List or String
+        :param seat_ids: Optional Id or Ids representing the seat(s) to unblock.
+        :type seat_ids: String or List
+        :rtype: An integer representing the number of devices unblocked.
         '''
         params = {}
         if device_ids is not None:

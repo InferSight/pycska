@@ -6,6 +6,8 @@
 Welcome to pycska's documentation!
 ==================================
 
+`Project source page <https://github.com/infersight/pycska>`_
+
 .. toctree::
    :maxdepth: 4
    :caption: Contents:
