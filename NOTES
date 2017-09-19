@@ -1,0 +1,10 @@
+# Installation Notes
+
+- update the version information in conf.py and setup.py
+- checkin and tag repo
+  git tag 0.3 -m "Tag details":
+  git push --tags origin master
+- build dist for pypi
+  sudo python setup.py sdist
+- upload to pypi
+  twine upload dist/pycska-0.3.tar.gz -r pypi -u <pypi-user> -p <pypi-password>
