@@ -13,6 +13,15 @@ pycska\.api module
     :show-inheritance:
 
 
+pycska\.basetypes module
+------------------------
+
+.. automodule:: pycska.basetypes
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 Module contents
 ---------------
 

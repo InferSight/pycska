@@ -8,3 +8,5 @@
   sudo python setup.py sdist
 - upload to pypi
   twine upload dist/pycska-0.3.tar.gz -r pypi -u <pypi-user> -p <pypi-password>
+- documentation
+  - The documentation is automatically update as files are checked in to GitHub
