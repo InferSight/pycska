@@ -2,7 +2,7 @@
 Low level interface to the OAuth1 API provided by the CSKA.
 '''
 
-#pylint: disable=too-many-arguments
+#pylint: disable=too-many-arguments, too-many-public-methods
 
 import json
 import binascii
@@ -17,12 +17,20 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 from pycska.basetypes import Action
 from pycska.basetypes import ConfigProfile
-from pycska.basetypes import Rule
 from pycska.basetypes import Device
 from pycska.basetypes import License
 from pycska.basetypes import LoggingPlugin
 from pycska.basetypes import OAuthClient
 from pycska.basetypes import OAuthClientSecret
+from pycska.basetypes import Rule
+from pycska.basetypes import Seat
+from pycska.basetypes import SecurityGroup
+
+
+LICENSE_TYPE_CSKA = ["Channel Signing Key Authority"] #: CSKA License Type
+LICENSE_TYPE_SIGNER = ["Channel Lock Signer"] #: Signer License Type
+LICENSE_TYPE_VALIDATOR = ["Channel Lock Validator"] #: Validator License Type
+LICENSE_TYPE_ALL = LICENSE_TYPE_CSKA + LICENSE_TYPE_SIGNER + LICENSE_TYPE_VALIDATOR #:All Licenses
 
 
 class ApiException(BaseException):
@@ -72,9 +80,12 @@ class Api(object):
 
         try:
             content = json.loads(raw_content)
-            if not content['ok']:
-                raise ApiException(content['error'])
-            return content['data']
+            if isinstance(content, str) or isinstance(content, unicode):
+                return content
+            else:
+                if not content['ok']:
+                    raise ApiException(content['error'])
+                return content['data']
         except ValueError:
             return raw_content
 
@@ -108,21 +119,34 @@ class Api(object):
         return [Action(content) for content in self.__get('allowed_actions')]
 
 
-    def post_block(self, device_ids=None, seat_ids=None):
+    def post_block(self, devices=None, seats=None):
         '''
         Block a given device or a seat on a device.
 
-        :param device_ids: Optional Id or Ids representing the device(s) to block.
-        :param seat_ids: Optional Id or Ids representing the seat(s) to block.
-        :type seat_ids: String or List
+        :param devices: Optional Id or Ids representing the device(s) to block.
+        :type devices: List of :py:class:`pycska.basetypes.Device`
+        :param seats: Optional Id or Ids representing the seat(s) to block.
+        :type seats: List of :py:class:`pycska.basetypes.Seat`
         :rtype: An integer representing the number of devices blocked.
         '''
-        params = {}
-        if device_ids is not None:
-            params['device_id'] = device_ids
-        if seat_ids is not None:
-            params['seat_id'] = seat_ids
-        return self.__post('block', params)
+        if devices is None:
+            devices = []
+        if not isinstance(devices, list):
+            raise ValueError("Invalid type for devices")
+        for device in devices:
+            if not isinstance(device, Device):
+                raise ValueError("Invalid type for device")
+        devices_param = [device.to_dict() for device in devices]
+        if seats is None:
+            seats = []
+        if not isinstance(seats, list):
+            raise ValueError("Invalid type for seats")
+        for seat in seats:
+            if not isinstance(seat, Seat):
+                raise ValueError("Invalid type for seat")
+        seats_param = [seat.to_dict() for seat in seats]
+        return self.__post('block', {'devices':devices_param,
+                                     'seats':seats_param})
 
 
     def get_capture(self, threat_id):
@@ -165,6 +189,8 @@ class Api(object):
 
         :rtype: Integer representing the profile id of the profile created or updated.
         '''
+        if not isinstance(config_profile, ConfigProfile):
+            raise ValueError("Invalid type for config_profile")
         return self.__post('config_profile', params=config_profile.to_dict())
 
 
@@ -177,6 +203,8 @@ class Api(object):
 
         :rtype: Not applicable
         '''
+        if not isinstance(config_profile, ConfigProfile):
+            raise ValueError("Invalid type for config_profile")
         return self.__delete('config_profile', params=config_profile.to_dict())
 
 
@@ -194,29 +222,34 @@ class Api(object):
         Delete the list of configuration profiles.
 
         :param config_profiles: List of config profiles to delete.
-        :type List of :py:class:`pycska.basetypes.ConfigProfile`
+        :type config_profiles: List of :py:class:`pycska.basetypes.ConfigProfile`
 
         :param delete_all: Are we deleting all config profiles.
-        :type Boolean
+        :type delete_all: Boolean
 
         :rtype: Not applicable
         '''
         if config_profiles is None:
             config_profiles = []
+        if not isinstance(config_profiles, list):
+            raise ValueError("Invalid type for config_profiles")
+        for config_profile in config_profiles:
+            if not isinstance(config_profile, list):
+                raise ValueError("Invalid type for config_profile")
         params = {'profiles': [profile.to_dict() for profile in config_profiles],
                   'delete_all': delete_all}
         return self.__delete('config_profiles', params=params)
 
 
-    def get_device(self, device_id=None, device_name=None):
+    def get_device(self, device_name=None, device_id=None):
         '''
         Get the a specific device by device_id or by device_name.
 
-        :param device_id: Optional value to filter the results on.
-        :type device_id: Integer
-
         :param device_name: Optional value to filter the results on.
         :type device_name: String
+
+        :param device_id: Optional value to filter the results on.
+        :type device_id: Integer
 
         :rtype: Type :py:class:`pycska.basetypes.Device`
         '''
@@ -237,6 +270,8 @@ class Api(object):
 
         :rtype: Integer representing the profile id of the profile created or updated.
         '''
+        if not isinstance(device, Device):
+            raise ValueError("Invalid type for device")
         return self.__post('device', params=device.to_dict())
 
 
@@ -262,13 +297,21 @@ class Api(object):
                                                           params=filter_query)]
 
 
-    def get_licenses(self):
+    def get_licenses(self, license_types=None):
         '''
         Get a list of all the licenses granted to the account.
 
+        :param license_types: Which licenses to filter on, :py:data:`LICENSE_TYPE_CSKA`,
+                              :py:data:`LICENSE_TYPE_SIGNER`, :py:data:`LICENSE_TYPE_VALIDATOR`,
+                              :py:data:`LICENSE_TYPE_ALL`.
+        :type license_types: String
+
         :rtype: List of :py:class:`pycska.basetypes.License`
         '''
-        return [License(content) for content in self.__get('licenses')]
+        if license_types is None:
+            license_types = LICENSE_TYPE_ALL
+        return [License(content) for content in self.__get('licenses') \
+                   if content['license_type'] in license_types]
 
 
     def get_logs_by_date(self, from_date, to_date, is_usage=False, format_as='json'):
@@ -322,6 +365,11 @@ class Api(object):
 
         :rtype: Not applicable
         '''
+        if not isinstance(logging_plugins, list):
+            raise ValueError("Invalid type for logging_plugins")
+        for logging_plugin in logging_plugins:
+            if not isinstance(logging_plugin, LoggingPlugin):
+                raise ValueError("Invalid type for logging_plugin")
         params = {'plugins': [logging_plugin.to_dict() for logging_plugin in logging_plugins]}
         return self.__post('logging_plugins', params=params)
 
@@ -337,6 +385,11 @@ class Api(object):
         '''
         if logging_plugins is None:
             logging_plugins = []
+        if not isinstance(logging_plugins, list):
+            raise ValueError("Invalid type for logging_plugins")
+        for logging_plugin in logging_plugins:
+            if not isinstance(logging_plugin, LoggingPlugin):
+                raise ValueError("Invalid type for logging_plugin")
         logging_plugins = [logging_plugin.to_dict() for logging_plugin in logging_plugins]
         return self.__delete('logging_plugins', {'plugins':logging_plugins,
                                                  'delete_all':delete_all})
@@ -377,10 +430,13 @@ class Api(object):
 
         :rtype: Integer representing the profile id of the profile created or updated.
         '''
+        if not isinstance(oauth_client, OAuthClient):
+            raise ValueError("Invalid type for oauth_client")
         params = {'client':oauth_client.to_dict(),
                   'reset_token':reset_token}
         if client_password is not None:
-            params['client_password_hash'] = binascii.hexlify(hashlib.sha256(client_password).digest())
+            params['client_password_hash'] = \
+                binascii.hexlify(hashlib.sha256(client_password).digest())
         return self.__post('oauth_client', params=params)
 
 
@@ -393,6 +449,8 @@ class Api(object):
 
         :rtype: Not applicable
         '''
+        if not isinstance(oauth_client, OAuthClient):
+            raise ValueError("Invalid type for oauth_client")
         return self.__delete('oauth_client', params=oauth_client.to_dict())
 
 
@@ -410,7 +468,6 @@ class Api(object):
         '''
         params = {'client_id': oauth_client.client_id,
                   'client_password_hash':binascii.hexlify(hashlib.sha256(client_password).digest())}
-        print params
         return OAuthClientSecret(self.__get('oauth_client_secret', params=params))
 
 
@@ -431,32 +488,249 @@ class Api(object):
         '''
         if oauth_clients is None:
             oauth_clients = []
+        if not isinstance(oauth_clients, list):
+            raise ValueError("Invalid type for oauth_clients")
+        for oauth_client in oauth_clients:
+            if not isinstance(oauth_client, OAuthClient):
+                raise ValueError("Invalid type for oauth_client")
         params = {'clients': [client.to_dict() for client in oauth_clients]}
         return self.__delete('oauth_clients', params=params),
 
 
-    def get_user_rules(self):
+    def get_oauth_state(self):
+        '''
+        Get the state of the OAuth API Explorer.
+
+        :rtype: Boolean indicating if the API Explorer is enabled.
+        '''
+        return self.__get('oauth_state')
+
+
+    def post_oauth_state(self, is_enabled):
+        '''
+        Set the state of the OAuth API Explorer.
+
+        :param is_enabled: Is The OAuth API Explorer enabled.
+        :type is_enabled: Boolean
+
+        :rtype: Not applicable.
+        '''
+        return self.__post('oauth_state', {'oauth_browser': is_enabled})
+
+
+    def get_overlay(self):
+        '''
+        Get the network overlay JSON used to overlay non channel locked devices
+        on to the network graph.
+
+        :rtype: String
+        '''
+        return self.__get('overlay')
+
+
+    def post_overlay(self, overlay_contents):
+        '''
+        Set the network overlay JSON used to overlay non channel locked devices
+        on to the network graph.
+
+        :param overlay_contents: Contents of overlay file.
+        :type overlay_contents: String
+
+        :rtype: Not applicable.
+        '''
+        return self.__post('overlay', overlay_contents)
+
+
+    def delete_overlay(self):
+        '''
+        Delete the network overlay JSON used to overlay non channel locked devices
+        on to the network graph.
+
+        :rtype: Not applicable.
+        '''
+        return self.__delete('overlay')
+
+
+    def get_remote_support(self):
+        '''
+        Get the state of remote support ssh access.
+
+        :rtype: Boolean indicating whether SSH access is allowed.
+        '''
+        return self.__get('remote_support')
+
+
+    def post_remote_support(self, is_on):
+        '''
+        Set the state of remote support ssh access.
+
+        :param is_on: Is SSH access to be enabled.
+        :type is_on: Boolean
+
+        :rtype: Not applicable.
+        '''
+        return self.__post('remote_support', {'is_on':is_on})
+
+
+    def post_seat(self, device, infersight_license):
+        '''
+        Assign the given InferSight license to the device.
+
+        :param device: Device to assign license to.
+        :type device: Type :py:class:`pycska.basetypes.Device`
+
+        :param infersight_license: License to assign to device.
+        :type infersight_license: Type :py:class:`pycska.basetypes.License`
+
+        :rtype: Type :py:class:`pycska.basetypes.License`
+        '''
+        if not isinstance(device, Device):
+            raise ValueError("Invalid type for device")
+        if not isinstance(infersight_license, License):
+            raise ValueError("Invalid type for infersight_license")
+        return self.__post('seat', {'device': device.to_dict(),
+                                    'license': infersight_license.to_dict()})
+
+
+    def delete_seat(self, seat):
+        '''
+        Revoke the specified seat.
+
+        :param seat: Seat to revoke.
+        :type seat: Type :py:class:`pycska.basetypes.Seat`
+
+        :rtype: Not applicable.
+        '''
+        if not isinstance(seat, Seat):
+            raise ValueError("Invalid type for seat")
+        return self.__delete('seat', {'seat': seat.to_dict()})
+
+
+    def get_security_group(self, group_name=None, group_id=None):
+        '''
+        Get the a specific security group by group_id or by group_name.
+
+        :param group_name: Optional value to filter the results on.
+        :type group_name: String
+
+        :param group_id: Optional value to filter the results on.
+        :type group_id: Integer
+
+        :rtype: Type :py:class:`pycska.basetypes.SecurityGroup`
+        '''
+        params = {}
+        if group_id is not None:
+            params['group_id'] = group_id
+        if group_name is not None:
+            params['group_name'] = group_name
+        return SecurityGroup(self.__get('security_group', params=params))
+
+
+    def post_security_group(self, group):
+        '''
+        Used to create or update a security_group
+
+        :param group: Security group to create or update.
+        :type group: Type :py:class:`pycska.basetypes.SecurityGroup`
+
+        :rtype: Integer representing the group id of the profile created or updated.
+        '''
+        if not isinstance(group, SecurityGroup):
+            raise ValueError("Invalid type for group")
+        return self.__post('security_group', params=group.to_dict())
+
+
+    def delete_security_group(self, group):
+        '''
+        Delete a security group.
+
+        :param group: Group to delete.
+        :type group: Type :py:class:`pycska.basetypes.SecurityGroup`
+
+        :rtype: Not applicable
+        '''
+        if not isinstance(group, SecurityGroup):
+            raise ValueError("Invalid type for group")
+        return self.__delete('security_group', params=group.to_dict())
+
+
+    def get_security_groups(self):
+        '''
+        Get all security groups.
+
+        :rtype: List of :py:class:`pycska.basetypes.SecurityGroup`
+        '''
+        return [SecurityGroup(content) for content in self.__get('security_groups')]
+
+    def delete_security_groups(self, groups=None, delete_all=False):
+        '''
+        Delete a list of security groups.
+
+        :param groups: Groups to delete.
+        :type groups: List of :py:class:`pycska.basetypes.SecurityGroup`
+
+        :param delete_all: Are we deleting all config profiles.
+        :type delete_all: Boolean
+
+        :rtype: Not applicable
+        '''
+        if groups is None:
+            groups = []
+        if not isinstance(groups, list):
+            raise ValueError("Invalid type for groups")
+        for group in groups:
+            if not isinstance(group, SecurityGroup):
+                raise ValueError("Invalid type for group")
+        params = {'groups': [group.to_dict() for group in groups],
+                  'delete_all': delete_all}
+        return self.__delete('security_groups', params=params)
+
+
+    def get_user_rules(self, rule_id=None, rule_name=None):
         '''
         Get a list of the user rules.
 
+        :param rule_name: Optional value to filter the results on.
+        :type rule_name: String
+
+        :param rule_id: Optional value to filter the results on.
+        :type rule_id: Integer
+
         :rtype: List of :py:class:`pycska.basetypes.Rule`
         '''
-        return [Rule(content) for content in self.__get('user_rules')]
+        params = {}
+        if rule_id is not None:
+            params['rule_id'] = rule_id
+        if rule_name is not None:
+            params['rule_name'] = rule_name
+        return [Rule(content) for content in self.__get('user_rules', params=params)]
 
 
-    def post_unblock(self, device_ids=None, seat_ids=None):
+    def post_unblock(self, devices=None, seats=None):
         '''
-        Unblock a given device or seat on a device.
+        Unblock a given device or a seat on a device.
 
-        :param device_ids: Optional Id or Ids representing the device(s) to unblock.
-        :type device_ids: List or String
-        :param seat_ids: Optional Id or Ids representing the seat(s) to unblock.
-        :type seat_ids: String or List
+        :param devices: Optional Id or Ids representing the device(s) to unblock.
+        :type devices: List of :py:class:`pycska.basetypes.Device`
+        :param seats: Optional Id or Ids representing the seat(s) to unblock.
+        :type seats: List of :py:class:`pycska.basetypes.Seat`
         :rtype: An integer representing the number of devices unblocked.
         '''
-        params = {}
-        if device_ids is not None:
-            params['device_id'] = device_ids
-        if seat_ids is not None:
-            params['seat_id'] = seat_ids
-        return self.__post('unblock', params)
+        if devices is None:
+            devices = []
+        if not isinstance(devices, list):
+            raise ValueError("Invalid type for devices")
+        for device in devices:
+            if not isinstance(device, Device):
+                raise ValueError("Invalid type for device")
+        devices_param = [device.to_dict() for device in devices]
+        if seats is None:
+            seats = []
+        if not isinstance(seats, list):
+            raise ValueError("Invalid type for seats")
+        for seat in seats:
+            if not isinstance(seat, Seat):
+                raise ValueError("Invalid type for seat")
+        seats_param = [seat.to_dict() for seat in seats]
+        return self.__post('unblock', {'devices':devices_param,
+                                       'seats':seats_param})
