@@ -2,9 +2,10 @@
 Low level interface to the OAuth1 API provided by the CSKA.
 '''
 
-#pylint: disable=too-many-arguments, too-many-public-methods
+#pylint: disable=too-many-arguments, too-many-public-methods, too-many-lines
 
 import json
+import random
 import binascii
 import hashlib
 import urllib
@@ -25,6 +26,10 @@ from pycska.basetypes import OAuthClientSecret
 from pycska.basetypes import Rule
 from pycska.basetypes import Seat
 from pycska.basetypes import SecurityGroup
+from pycska.basetypes import Stats
+from pycska.basetypes import SystemStatus
+from pycska.basetypes import Threat
+from pycska.basetypes import User
 
 
 LICENSE_TYPE_CSKA = ["Channel Signing Key Authority"] #: CSKA License Type
@@ -59,7 +64,7 @@ class Api(object):
                                      'accept': 'application/json'})
 
 
-    def __get(self, endpoint, params=None):
+    def __get(self, endpoint, params=None, return_total=False):
         if params is None:
             params = {}
 
@@ -85,7 +90,11 @@ class Api(object):
             else:
                 if not content['ok']:
                     raise ApiException(content['error'])
-                return content['data']
+                data = content['data']
+                if not return_total:
+                    return data
+                else:
+                    return data, content['total']
         except ValueError:
             return raw_content
 
@@ -234,7 +243,7 @@ class Api(object):
         if not isinstance(config_profiles, list):
             raise ValueError("Invalid type for config_profiles")
         for config_profile in config_profiles:
-            if not isinstance(config_profile, list):
+            if not isinstance(config_profile, ConfigProfile):
                 raise ValueError("Invalid type for config_profile")
         params = {'profiles': [profile.to_dict() for profile in config_profiles],
                   'delete_all': delete_all}
@@ -686,33 +695,126 @@ class Api(object):
         return self.__delete('security_groups', params=params)
 
 
-    def get_user_rules(self, rule_id=None, rule_name=None):
+    def get_stats(self, device_id=None, seat_id=None):
         '''
-        Get a list of the user rules.
+        Get the stats for a given device or seat.
 
-        :param rule_name: Optional value to filter the results on.
-        :type rule_name: String
-
-        :param rule_id: Optional value to filter the results on.
-        :type rule_id: Integer
-
-        :rtype: List of :py:class:`pycska.basetypes.Rule`
+        :rtype: List of :py:class:`pycska.basetypes.Stats`
         '''
         params = {}
-        if rule_id is not None:
-            params['rule_id'] = rule_id
-        if rule_name is not None:
-            params['rule_name'] = rule_name
-        return [Rule(content) for content in self.__get('user_rules', params=params)]
+        if device_id is not None:
+            params['device_id'] = device_id
+        if seat_id is not None:
+            params['seat_id'] = seat_id
+        return [Stats(content) for content in self.__get('stats', params=params)]
+
+
+    def delete_stats(self, device_id=None, seat_id=None):
+        '''
+        Clear the stats for a given device or seat.
+
+        :rtype: Not applicable
+        '''
+        params = {}
+        if device_id is not None:
+            params['device_id'] = device_id
+        if seat_id is not None:
+            params['seat_id'] = seat_id
+        return self.__delete('stats', params=params)
+
+
+    def get_system_status(self):
+        '''
+        Get the current system status.
+
+        :rtype: Type :py:class:`pycska.basetypes.SystemStatus`
+        '''
+        return SystemStatus(self.__get('system_status'))
+
+
+    def get_threats(self, start, limit, load_acknowledged=False):
+        '''
+        Get the current list of threats.
+
+        :rtype: Tuple (List of :py:class:`pycska.basetypes.Threat`, Number of threats)
+        '''
+        threats, total = self.__get('threats', {'start':start,
+                                                'limit':limit,
+                                                'load_acknowledged':load_acknowledged}, True)
+        return ([Threat(content) for content in threats], total)
+
+
+    def post_threats(self, ack_state, threats=None, modify_all=False):
+        '''
+        Update the acknowledged state on a list of threats or on all threats.
+
+        :param ack_state: Flag indicating the new state of the threat(s).
+        :type ack_state: Boolean
+
+        :param threats: Optional threat(s) to update the ack state for.
+        :type threats: List of :py:class:`pycska.basetypes.Threat`
+
+        :param modify_all: Optional flag indicating if all threats are to be updated.
+        :type modify_all: Boolean
+
+        :rtype: Not applicable
+        '''
+        if threats is None:
+            threats = []
+        threats_param = [threat.to_dict() for threat in threats]
+        return self.__post('threats', {'threats':threats_param,
+                                       'ack_state':ack_state,
+                                       'modify_all':modify_all})
+
+
+    def delete_threats(self, threats=None, delete_all=False):
+        '''
+        Delete a list of threats or all threats.
+
+        :param threats: Optional threat(s) to delete.
+        :type threats: List of :py:class:`pycska.basetypes.Threat`
+
+        :param delete_all: Optional flag indicating if all threats are to be deleted.
+        :type delete_all: Boolean
+
+        :rtype: Not applicable
+        '''
+        if threats is None:
+            threats = []
+        threats_param = [threat.to_dict() for threat in threats]
+        return self.__delete('threats', {'threats':threats_param,
+                                         'delete_all':delete_all})
+
+
+    def post_ticket(self, priority, short_reason, long_reason, use_remote_support):
+        '''
+        Create a new support ticket.
+
+        :param priority: Priority of support ticket (1-Critical, 2-Service Affecting, 3-General)
+        :type priority: Integer
+
+        :param short_reason: Short description of issue.
+        :type short_reason: String
+
+        :param long_reason: Long description of issue.
+        :type long_reason: String
+
+        :param use_remote_support: Should remote access be allowed to support.
+        :type use_remote_support: Boolean
+        '''
+        return self.__post('ticket', {'priority':priority,
+                                      'short_reason':short_reason,
+                                      'long_reason':long_reason,
+                                      'use_remote_support':use_remote_support})
 
 
     def post_unblock(self, devices=None, seats=None):
         '''
         Unblock a given device or a seat on a device.
 
-        :param devices: Optional Id or Ids representing the device(s) to unblock.
+        :param devices: Optional device(s) to unblock.
         :type devices: List of :py:class:`pycska.basetypes.Device`
-        :param seats: Optional Id or Ids representing the seat(s) to unblock.
+        :param seats: Optional seat(s) to unblock.
         :type seats: List of :py:class:`pycska.basetypes.Seat`
         :rtype: An integer representing the number of devices unblocked.
         '''
@@ -734,3 +836,214 @@ class Api(object):
         seats_param = [seat.to_dict() for seat in seats]
         return self.__post('unblock', {'devices':devices_param,
                                        'seats':seats_param})
+
+
+    def get_user(self, user_name=None):
+        '''
+        Get a user by user name.
+
+        :param user_name: User name used to login to CSKA.
+        :type user_name: String
+
+        :rtype: Type :py:class:`pycska.basetypes.User`
+        '''
+        params = {}
+        if user_name is not None:
+            params['user_name'] = user_name
+        return User(self.__get('user', params=params))
+
+
+    def post_user(self, user, password_clear=None):
+        '''
+        Update a user.
+
+        :param user: User to update or create.
+        :type user: Type :py:class:`pycska.basetypes.user`
+
+        :rtype: Not applicable
+        '''
+        params = {'user':user.to_dict()}
+        if password_clear is not None:
+            params['password_salt'] = binascii.hexlify(hashlib.sha256(\
+                ''.join([chr(int(random.random()*256)) for _ in range(256)])).digest())
+            params['password'] = password_clear
+        return self.__post('user', params=params)
+
+
+    def delete_user(self, user):
+        '''
+        Delete a user.
+
+        :param user: User to delete.
+        :type user: Type :py:class:`pycska.basetypes.user`
+
+        :rtype: Not applicable
+        '''
+        if not isinstance(user, User):
+            raise ValueError("Invalid type for user")
+        return self.__delete('user', params=user.to_dict())
+
+
+    def get_user_certificate(self, user_or_user_name):
+        '''
+        Get a user certificate by user or user_name.
+
+        :param user: User to login to CSKA.
+        :type user: Type :py:class:`pycska.basetypes.user` or String
+
+        :rtype: String
+        '''
+        params = {}
+        if isinstance(user_or_user_name, User):
+            params['user_name'] = user_or_user_name.user_name
+        elif isinstance(user_or_user_name, str) or isinstance(user_or_user_name, unicode):
+            params['user_name'] = user_or_user_name
+        else:
+            raise ValueError("Invalid type for user")
+        return self.__get('user_certificate', params=params)
+
+
+    def get_user_certificate_state(self):
+        '''
+        Gets whether user certifcates are enforced.
+
+        :rtype: Boolean
+        '''
+        return self.__get('user_certificate_state')
+
+
+    def post_user_certificate_state(self, force_certificates):
+        '''
+        Sets whether user certifcates are enforced.
+
+        :param force_certificates: Are user certficates forced.
+        :type force_certificates: Boolean
+
+        :rtype: Not applicable
+        '''
+        return self.__post('user_certificate_state', {'force_certificates':force_certificates})
+
+
+    def get_user_rule(self, rule_id=None):
+        '''
+        Get a specific user rule.
+
+        :param rule_id: Optional value to filter the results on.
+        :type rule_id: Integer
+
+        :rtype: Type :py:class:`pycska.basetypes.Rule`
+        '''
+        params = {}
+        if rule_id is not None:
+            params['rule_id'] = rule_id
+        return Rule(self.__get('user_rule', params=params))
+
+
+    def post_user_rule(self, rule):
+        '''
+        Update a specific user rule or create a new rule.
+
+        :param rule: Rule to update/create.  Leave rule_id blank to create a new rule.
+        :type rule: Type :py:class:`pycska.basetypes.Rule`
+
+        :rtype: Integer - rule_id
+        '''
+        if not isinstance(rule, Rule):
+            raise ValueError('Invalid type for rule')
+        return self.__post('user_rule', params=rule.to_dict())
+
+
+    def delete_user_rule(self, rule):
+        '''
+        Delete a specific user rule.
+
+        :param rule: Rule to delete.
+        :type rule: Type :py:class:`pycska.basetypes.Rule`
+
+        :rtype: Not applicable
+        '''
+        if not isinstance(rule, Rule):
+            raise ValueError('Invalid type for rule')
+        return self.__delete('user_rule', params=rule.to_dict())
+
+
+    def get_user_rules(self, rule_id=None, rule_name=None):
+        '''
+        Get a list of the user rules.
+
+        :param rule_name: Optional value to filter the results on.
+        :type rule_name: String
+
+        :param rule_id: Optional value to filter the results on.
+        :type rule_id: Integer
+
+        :rtype: List of :py:class:`pycska.basetypes.Rule`
+        '''
+        params = {}
+        if rule_id is not None:
+            params['rule_id'] = rule_id
+        if rule_name is not None:
+            params['rule_name'] = rule_name
+        return [Rule(content) for content in self.__get('user_rules', params=params)]
+
+
+    def delete_user_rules(self, user_rules=None, delete_all=False):
+        '''
+        Delete the list of user_rules.
+
+        :param user_rules: List of user rules to delete.
+        :type user_rules: List of :py:class:`pycska.basetypes.Rule`
+
+        :param delete_all: Are we deleting all user rules.
+        :type delete_all: Boolean
+
+        :rtype: Not applicable
+        '''
+        if user_rules is None:
+            user_rules = []
+        if not isinstance(user_rules, list):
+            raise ValueError("Invalid type for user_rules")
+        for user_rule in user_rules:
+            if not isinstance(user_rule, Rule):
+                raise ValueError("Invalid type for user_rule")
+        params = {'rules': [rule.to_dict() for rule in user_rules],
+                  'delete_all': delete_all}
+        return self.__delete('user_rules', params=params)
+
+
+    def get_users(self):
+        '''
+        Get all the users.
+
+        :rtype: List of :py:class:`pycska.basetypes.User`
+        '''
+        return [User(content) for content in self.__get('users')]
+
+
+    def delete_users(self, users):
+        '''
+        Delete the list of users.
+
+        :param users: List of Users to delete.
+        :type users: List of :py:class:`pycska.basetypes.User`
+
+        :rtype: Not applicable
+        '''
+        if users is None:
+            users = []
+        if not isinstance(users, list):
+            raise ValueError("Invalid type for users")
+        for user in users:
+            if not isinstance(user, User):
+                raise ValueError("Invalid type for user")
+        params = {'users': [user.to_dict() for user in users]}
+        return self.__delete('users', params=params)
+
+
+    def get_version(self):
+        '''
+        Get the current version of the CSKA.
+
+        :rtype: String
+        '''
+        return self.__get('version')

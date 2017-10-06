@@ -116,8 +116,6 @@ class CSKAType(object):
         return {}
 
 
-
-
 class Action(CSKAType):
     '''
     CSKA Rule Actions.
@@ -325,14 +323,15 @@ class RuleSummary(CSKAType):
 
 class Seat(CSKAType):
     '''
-    License seat details.
+    license seat details.
 
-    Seat details contain the following fields:
-      - seat_id (string): Internal Id representing the license seat.
+    seat details contain the following fields:
+      - seat_id (string): internal id representing the license seat.
+      - license_name (string): type of license for the seat.
     '''
     @property
     def _fields(self):
-        return ['seat_id']
+        return ['seat_id', 'license_name']
 
 
 class SecurityGroup(CSKAType):
@@ -359,6 +358,80 @@ class SecurityGroup(CSKAType):
                 'validates_groups':SecurityGroupSummary}
 
 
+class StatsCounter(CSKAType):
+    '''
+    Common properties for all stats counters.
+
+    Stats counters contain the following fields:
+      - seconds: Current count per second.
+      - minutes: Current count per minute.
+      - hours: Current count per hour.
+      - total: Total number of counter.
+    '''
+    @property
+    def _fields(self):
+        return ['seconds', 'minutes', 'hours', 'total']
+
+
+class StatsDriver(CSKAType):
+    '''
+    The driver holds stats for different counters.
+
+    Not all the counters are implemented for each seat type but the following
+    fields are all possible counters that are kept track of:
+      - signed_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Number of signed packets.
+      - dropped_verify_bad_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Dropped due to bad verification.
+      - seen_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Number of packets passed through driver.
+      - accept_allow_all_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Number of packets accepted because driver is configured to allow all.
+      - accept_unverified_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Number of packets accepted because rules are not set to verify the packet.
+      - accept_verify_good_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Number of packets accepted because they were verified by the driver.
+      - accept_allow_unsigned_packets (:py:class:`pycska.basetypes.StatsCounter`)
+        - Number of packets accepted because they failed verification but mode is set to allow.
+    '''
+    @property
+    def _fields(self):
+        return ['signed_packets', 'dropped_verify_bad_packets', 'seen_packets',
+                'accept_allow_all_packets', 'accept_unverified_packets',
+                'accept_verify_good_packets', 'accept_allow_unsigned_packets']
+
+    @property
+    def _complex_fields(self):
+        return {'signed_packets':StatsCounter,
+                'dropped_verify_bad_packets':StatsCounter,
+                'seen_packets':StatsCounter,
+                'accept_allow_all_packets':StatsCounter,
+                'accept_unverified_packets':StatsCounter,
+                'accept_verify_good_packets':StatsCounter,
+                'accept_allow_unsigned_packets':StatsCounter}
+
+
+class Stats(CSKAType):
+    '''
+    Stats for a give seat license - either signer or validator.
+
+    Stat details contain the following fields:
+      - seat: Type :py:class:`pycska.basetypes.Seat`
+      - up_time: How long has the seat been up in seconds.
+      - last_updated: When did the seat last contact the CSKA.  Seconds since epoch (UTC).
+      - cpu_percent: Current CPU utilization for device that the seat is running on.
+      - memory_percent: Current memory utilization for device that the seat is running on.
+      - driver: Stats details from the low level driver.
+    '''
+    @property
+    def _fields(self):
+        return ['seat', 'up_time', 'last_updated', 'cpu_percent', 'driver']
+
+    @property
+    def _complex_fields(self):
+        return {'seat':Seat, 'driver':StatsDriver}
+
+
 class SecurityGroupSummary(CSKAType):
     '''
     Core details of a security group.  This type or the core SecurityGroup type can be
@@ -373,3 +446,61 @@ class SecurityGroupSummary(CSKAType):
         return ['group_id', 'group_name']
 
 
+class SystemStatus(CSKAType):
+    '''
+    System status details.
+
+    System status contains the following fields:
+      - num_offline (int): Number of devices currently offline.
+      - num_online (int): Number of devices currently online.
+      - num_threats (int): Number of un-acknowledged threats.
+      - num_oauth1 (int): Number of clients that are allowed to used OAuth1.
+      - num_oauth2 (int): Number of clients that are allowed to used OAuth2.
+      - remote_support_enabled (bool): Is remote support access allowed.
+    '''
+    @property
+    def _fields(self):
+        return ['num_offline', 'num_online', 'num_threats', 'num_oauth1',
+                'num_oauth2', 'remote_support_enabled']
+
+
+class Threat(CSKAType):
+    '''
+    Threat details.
+
+    Threat details contain the following fields:
+      - time (int): Seconds since epoch (UTC) when threat occurred.
+      - threat_id (string): Unique internal id representing the threat.
+      - threat (string): Description of the threat.
+      - count (int): Number of threats in this record.
+      - has_capture (bool): Is there a capture available for this threat.
+      - acknowledged (bool): Has this threat been acknowledged.
+      - name (string): Name of signing device or the IP address if the source is unknown.
+      - signer_seat_id (string): Seat id of the signer if the source is known.
+      - device_id (string): Device id of the signer if the source is known.
+      - validator (string): Name of the validator that detected the issue.
+      - validator_seat_id (string): Seat id of the validator that detected the issue.
+      - seat_id (string): Seat id of the device that detected the issue - typically the validator.
+    '''
+    @property
+    def _fields(self):
+        return ['time', 'threat_id', 'threat', 'count', 'has_capture', 'acknowledged',
+                'name', 'signer_seat_id', 'device_id', 'validator', 'validator_seat_id',
+                'seat_id']
+
+
+class User(CSKAType):
+    '''
+    User details.
+
+    Users contain the following fields:
+        - user_name (string): Name used to login to CSKA with.
+        - full_name (string): Full name of user.
+        - is_certificate_downloaded (bool): Has the user cert been downloaded yet.
+        - password_salt (string): Hex Random value of up to 64 chars - usually sha256 of a random.
+        - password_hash (string): Hex SHA256 hash of (clear text pwd + password_salt)
+    '''
+    @property
+    def _fields(self):
+        return ['user_name', 'full_name', 'is_certificate_downloaded', 'password_salt',
+                'password_hash']
