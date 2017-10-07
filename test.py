@@ -1,8 +1,6 @@
 import time
 
-from pycska.api import Api
-from pycska.api import ApiException
-from pycska.api import LICENSE_TYPE_SIGNER
+from pycska.api import *
 
 from pycska.basetypes import ProfileDetails
 from pycska.basetypes import ConfigProfile
@@ -20,13 +18,6 @@ OAUTH_TOKEN_SECRET = 'ax35zOIedSWoGNmXBX8EQyKl3GRVPJ'
 api = Api('cska', CLIENT_ID, CLIENT_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
 
 try:
-#    rule = Rule()
-#    rule.rule_name = "New Rule"
-#    rule.custom_bpf = "host 1.1.1.1"
-#    rule.layer = 3
-#    print api.post_user_rule(rule)
-     rule1 = api.get_user_rules(rule_name='Rule 1')[0]
-     rule2 = api.get_user_rules(rule_name='Rule 2')[0]
-     api.delete_user_rules([rule1, rule2])
+    print api.get_rules()
 except ApiException as e:
     print 'Error: '+e.error

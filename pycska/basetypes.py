@@ -16,23 +16,37 @@ class CSKAType(object):
     of the field names specified in fields with the field names actually
     used in the API.  However, if the API changes we can keep the same field names
     in this file and simply implement the **_field_overrides** getter and specify
-    the new mapping.  For instance in the Action class below::
+    the new mapping.  For instance in the ConfigProfile class below::
 
         @property
         def _field_overrides(self):
-            return {'signer':'signer_changed'}
+            return {'configuration':'config'}
 
-    In the above case, the *signer* field used in the CSKA Api was renamed to
-    *signer_changed*.  In order to keep this file the same so users of this code
-    don't have to change, we can simply specify the mapping above.
+    In the above case, the *configuration* field used in the CSKA Api was renamed to
+    *config* in the software.  In order to keep users of this file from having to change,
+    we can simply specify the mapping above.
     '''
     def __init__(self, raw_type=None):
         if raw_type is None:
             raw_type = {}
         if isinstance(raw_type, dict):
+            for key, value in raw_type.items():
+                if isinstance(value, list):
+                    new_value = []
+                    for item in value:
+                        if hasattr(item, 'to_dict'):
+                            new_value.append(item.to_dict())
+                        else:
+                            new_value.append(item)
+                    raw_type[key] = new_value
+                if hasattr(value, 'to_dict'):
+                    raw_type[key] = value.to_dict()
             self.__dict__['_raw_type'] = raw_type
         else:
             raise ValueError("raw_type must be a dictionary")
+
+    def __dir__(self):
+        return self._fields
 
     def __setattr__(self, attr, value):
         if self.__dict__.has_key(attr):
@@ -116,26 +130,6 @@ class CSKAType(object):
         return {}
 
 
-class Action(CSKAType):
-    '''
-    CSKA Rule Actions.
-
-    Actions are specified with the following fields:
-      - action_id (int): Internal Id representing the rule action.
-      - action (string): Name of rule action.
-      - signer (bool): Does this application apply to signers.
-      - validator (bool): Does this application apply to validators.
-    '''
-    @property
-    def _fields(self):
-        '''
-        List of relevant fields.
-
-        :rtype: List of fields.
-        '''
-        return ['action_id', 'action', 'signer', 'validator']
-
-
 class ConfigProfile(CSKAType):
     '''
     Configuration profile for a device.
@@ -212,7 +206,7 @@ class LoggingPlugin(CSKAType):
     Logging Plugin details.
 
     Logging Plugins are specified with the following fields:
-      - name (string): Name of logging plugin.
+      - plugin_name (string): Name of logging plugin.
       - ip (string): Address of the logging store.
       - port (int): Port the logging store is listening on.
       - protocol (string): Protocol the logging store is listening for - UDP, TCP.
@@ -222,7 +216,7 @@ class LoggingPlugin(CSKAType):
     '''
     @property
     def _fields(self):
-        return ['name', 'ip', 'port', 'protocol', 'url', 'rfc3164', 'reachable']
+        return ['plugin_name', 'ip', 'port', 'protocol', 'url', 'rfc3164', 'reachable']
 
 
 class OAuthClient(CSKAType):
@@ -249,6 +243,7 @@ class OAuthClientSecret(CSKAType):
     OAuth client secret details.
 
     OAuth client secrets are specified with the following fields:
+      - client_id (string): Server created id representing the client.
       - client_secret (string): OAuth1/2 client secret.
       - oauth1_token (string): OAuth1 token or empty if OAuth1 is not allowed.
       - oauth1_token_secret (string): OAuth1 token secret or empty if OAuth1 is not allowed.
@@ -257,7 +252,7 @@ class OAuthClientSecret(CSKAType):
     '''
     @property
     def _fields(self):
-        return ['client_secret', 'oauth1_token', 'oauth1_token_secret', 'oauth2_token',
+        return ['client_id', 'client_secret', 'oauth1_token', 'oauth1_token_secret', 'oauth2_token',
                 'oauth2_refresh_token']
 
 
@@ -305,7 +300,7 @@ class Rule(CSKAType):
         '''
         return ['rule_id', 'rule_name', 'meta', 'action', 'hash_algorithm', 'layer',
                 'include_dos_protection', 'custom_bpf', 'protocol', 'start_port',
-                'end_port', 'src_cidr', 'dst_cidr']
+                'end_port', 'src_cidr', 'dst_cidr', 'description']
 
 
 class RuleSummary(CSKAType):

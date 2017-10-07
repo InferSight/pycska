@@ -1,16 +1,18 @@
 pycska package
 ==============
 
-Submodules
-----------
-
 pycska\.api module
 ------------------
 
-.. automodule:: pycska.api
+.. autoclass:: pycska.api.Api
     :members:
     :undoc-members:
     :show-inheritance:
+
+     .. rubric:: Methods
+
+     .. autoautosummary:: pycska.api.Api
+         :methods:
 
 
 pycska\.basetypes module

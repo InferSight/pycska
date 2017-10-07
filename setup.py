@@ -5,12 +5,12 @@ from distutils.core import setup
 setup(
   name = 'pycska',
   packages = ['pycska'], # this must be the same as the name above
-  version = '0.8',
+  version = '0.9',
   description = 'Infersight CSKA API',
   author = 'Steve Graham',
   author_email = 'sgraham@infersight.com',
   url = 'https://github.com/infersight/pycska',
-  download_url = 'https://github.com/infersight/pycska/archive/0.8.tar.gz',
+  download_url = 'https://github.com/infersight/pycska/archive/0.9.tar.gz',
   keywords = ['infersight', 'cska'], # arbitrary keywords
   install_requires=[
           'requests==2.14.2',
