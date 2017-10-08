@@ -15,6 +15,11 @@ Welcome to pycska's documentation!
    pycska
 
 
+Installation
+==================
+
+pip install pycska
+
 Indices and tables
 ==================
 
