@@ -473,6 +473,8 @@ class Threat(CSKAType):
       - name (string): Name of signing device or the IP address if the source is unknown.
       - signer_seat_id (string): Seat id of the signer if the source is known.
       - device_id (string): Device id of the signer if the source is known.
+      - device (:py:class:`pycska.basetypes.Device`)
+        - Device of the signer if the source is known.
       - validator (string): Name of the validator that detected the issue.
       - validator_seat_id (string): Seat id of the validator that detected the issue.
       - seat_id (string): Seat id of the device that detected the issue - typically the validator.
@@ -481,7 +483,11 @@ class Threat(CSKAType):
     def _fields(self):
         return ['time', 'threat_id', 'threat', 'count', 'has_capture', 'acknowledged',
                 'name', 'signer_seat_id', 'device_id', 'validator', 'validator_seat_id',
-                'seat_id']
+                'seat_id', 'device']
+
+    @property
+    def _complex_fields(self):
+        return {'device':Device}
 
 
 class User(CSKAType):

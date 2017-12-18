@@ -79,7 +79,15 @@ class Api(object):
     The above code creates a new instance of this class to be used for all API functions below.
     '''
 
-    def __init__(self, cska_ip, client_id, client_secret, oauth1_token, oauth1_token_secret):
+    def __init__(self, cska_ip, client_id_or_json, client_secret=None, 
+                 oauth1_token=None, oauth1_token_secret=None):
+        if client_secret is None:
+            creds_json = json.loads(open(client_id_or_json, 'r').read())
+            client_id = creds_json['CLIENT_ID']
+            client_secret = creds_json['CLIENT_SECRET']
+            oauth1_token = creds_json['OAUTH_TOKEN']
+            oauth1_token_secret = creds_json['OAUTH_TOKEN_SECRET']
+        self.__last_threat_count = None
         self.__base_url = 'https://'+cska_ip+'/public/api/1_0/'
         self.__oauth = OAuth1Session(client_id, client_secret, oauth1_token, oauth1_token_secret)
         self.__oauth.headers.update({'content-type': 'application/json',
@@ -1568,7 +1576,9 @@ class Api(object):
         return SystemStatus(self.__get('system_status'))
 
 
-    def get_threats(self, start, limit, load_acknowledged=False):
+    def get_threats(self, start=0, limit=None, load_acknowledged=False,
+                    threat_filter_list=None,
+                    get_device=True):
         '''
         Get the current list of threats.
 
@@ -1581,6 +1591,13 @@ class Api(object):
         :param load_acknowledged: Load acknowledged as well as unacknowledged threats.
         :type load_acknowledged: Boolean
 
+        :param threat_filter_list: Optional list of strings to filter threats on.
+        :type threat_filter_list: List of Strings
+
+        :param get_device: For each threat do we attempt to lookup the device that caused
+                           the threat.
+        :type get_device: Boolean
+
         :rtype: Tuple (List of :py:class:`pycska.basetypes.Threat`, Number of threats)
 
         Example usage::
@@ -1590,9 +1607,42 @@ class Api(object):
         Gets the most recent 100 threats.  The variable *total* contains the total number
         of theats that could be retrieved.
         '''
-        params = {'start':start, 'limit':limit, 'load_acknowledged':load_acknowledged}
-        threats, total = self.__get('threats', params, True)
-        return ([Threat(content) for content in threats], total)
+        if limit is None:
+            params = {'start':0, 'limit':1000, 'load_acknowledged':False}
+            threats, total = self.__get('threats', params, True)
+            if self.__last_threat_count is None:
+                self.__last_threat_count = total
+            new_limit = total - self.__last_threat_count
+            self.__last_threat_count = total
+        else:
+            new_limit = limit
+        if new_limit <= 0:
+            return ([], total)
+        params = {'start':start, 'limit':new_limit, 'load_acknowledged':load_acknowledged}
+        try:
+            threats, total = self.__get('threats', params, True)
+        except ApiException as e:
+            print e.error
+            return ([], 0)
+        if threat_filter_list is None:
+            filtered_threats = [Threat(content) for content in threats]
+        else:
+            filtered_threats = []
+            for content in threats:
+                threat = Threat(content)
+                for threat_filter in threat_filter_list:
+                    if threat_filter in threat.threat:
+                        filtered_threats.append(threat)
+                        break
+        if get_device:
+            for threat in filtered_threats:
+                if threat.device_id is not None:
+                    try:
+                        device = self.get_device(device_id = threat.device_id)
+                        threat.device = device
+                    except ApiException:
+                        pass
+        return (filtered_threats, total)
 
 
     def update_threats(self, ack_state, threats=None, modify_all=False):
