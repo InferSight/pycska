@@ -13,7 +13,7 @@ setup(
   download_url = 'https://github.com/infersight/pycska/archive/0.9.tar.gz',
   keywords = ['infersight', 'cska'], # arbitrary keywords
   install_requires=[
-          'requests==2.14.2',
+          'requests==2.20.0',
           'requests-oauthlib==0.8.0',
           'sphinx_rtd_theme==0.2.5b1'
       ],
